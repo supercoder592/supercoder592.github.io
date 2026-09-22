@@ -47,10 +47,9 @@
 
 <div id="setup" hidden>
   <div class="card">
-    <b>連線到你電腦上的 AI</b>
-    <small>先在電腦上執行 <code>uv run server.py</code>，把終端機印出的 Token 貼到這裡。</small>
+    <b>連線設定</b>
+    <small>先在電腦上執行 <code>uv run server.py</code>。預設連本機，通常不用改。</small>
     <input id="url" placeholder="ws://127.0.0.1:8765/ws">
-    <input id="tok" placeholder="Token">
     <button id="save">連線</button>
   </div>
 </div>
@@ -62,8 +61,7 @@ let ws, busy = false, current = null;
 
 const cfg = {
   get url() { return localStorage.getItem('ai.url') || 'ws://127.0.0.1:8765/ws'; },
-  get tok() { return localStorage.getItem('ai.tok') || ''; },
-  set(url, tok) { localStorage.setItem('ai.url', url); localStorage.setItem('ai.tok', tok); },
+  set(url) { localStorage.setItem('ai.url', url); },
 };
 
 function add(cls, text) {
@@ -78,15 +76,13 @@ function addTool(name, args) {
 }
 
 function connect() {
-  if (!cfg.tok) { $('#setup').hidden = false; return; }
   status.textContent = '連線中…'; status.className = '';
-  ws = new WebSocket(`${cfg.url}?token=${encodeURIComponent(cfg.tok)}`);
+  ws = new WebSocket(cfg.url);
   ws.onopen = () => { status.textContent = '已連線'; status.className = 'ok'; };
   ws.onclose = e => {
     status.className = 'err';
-    status.textContent = e.code === 4401 ? 'Token 錯誤' : '已斷線（伺服器有開嗎？）';
-    if (e.code === 4401) $('#setup').hidden = false;
-    else setTimeout(connect, 3000);
+    status.textContent = e.code === 4403 ? '此網域不在伺服器允許清單' : '已斷線（電腦上有跑 uv run server.py 嗎？）';
+    if (e.code !== 4403) setTimeout(connect, 3000);
   };
   ws.onmessage = ({ data }) => {
     const ev = JSON.parse(data);
@@ -113,8 +109,8 @@ $('#f').onsubmit = e => {
 input.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#f').requestSubmit(); } };
 input.oninput = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 200) + 'px'; };
 $('#reset').onclick = () => ws?.send(JSON.stringify({ action: 'reset' }));
-$('#cfg').onclick = () => { $('#url').value = cfg.url; $('#tok').value = cfg.tok; $('#setup').hidden = false; };
-$('#save').onclick = () => { cfg.set($('#url').value.trim(), $('#tok').value.trim()); $('#setup').hidden = true; ws?.close(); connect(); };
+$('#cfg').onclick = () => { $('#url').value = cfg.url; $('#setup').hidden = false; };
+$('#save').onclick = () => { cfg.set($('#url').value.trim() || 'ws://127.0.0.1:8765/ws'); $('#setup').hidden = true; ws?.close(); connect(); };
 
 connect();
 </script>
