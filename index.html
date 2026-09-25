@@ -2,117 +2,263 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>own-ai · 桌面</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0f14">
+<title>遠端遙控</title>
 <style>
-  :root { --bg:#0f1115; --panel:#171a21; --line:#262a33; --fg:#e6e6e6; --dim:#8a8f9c; --accent:#5b9cff; --ok:#3ecf8e; --err:#ff6b6b; }
-  * { box-sizing:border-box }
-  body { margin:0; background:var(--bg); color:var(--fg); font:15px/1.6 system-ui,-apple-system,"Segoe UI","Noto Sans TC",sans-serif; display:flex; flex-direction:column; height:100vh }
-  header { display:flex; align-items:center; gap:12px; padding:10px 16px; border-bottom:1px solid var(--line); background:var(--panel) }
-  header b { font-weight:600 }
-  #status { font-size:13px; color:var(--dim) }
-  #status.ok { color:var(--ok) } #status.err { color:var(--err) }
-  header .sp { flex:1 }
-  header button { background:none; border:1px solid var(--line); color:var(--dim); border-radius:6px; padding:4px 10px; cursor:pointer }
-  #log { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:10px }
-  .msg { max-width:800px; padding:10px 14px; border-radius:10px; white-space:pre-wrap; word-break:break-word }
-  .user { align-self:flex-end; background:#243b63 }
-  .ai { align-self:flex-start; background:var(--panel); border:1px solid var(--line) }
-  .tool { align-self:flex-start; font:13px/1.5 ui-monospace,Consolas,monospace; color:var(--dim); border-left:2px solid var(--line); padding:4px 10px; max-width:800px }
-  .tool summary { cursor:pointer; color:var(--accent) }
-  .tool pre { margin:6px 0 0; white-space:pre-wrap; max-height:240px; overflow:auto; color:var(--fg) }
-  .error { align-self:flex-start; color:var(--err) }
-  form { display:flex; gap:8px; padding:12px 16px; border-top:1px solid var(--line); background:var(--panel) }
-  textarea { flex:1; resize:none; background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:10px; font:inherit; min-height:44px; max-height:200px }
-  form button { background:var(--accent); color:#fff; border:0; border-radius:8px; padding:0 18px; cursor:pointer; font:inherit }
-  form button:disabled { opacity:.5; cursor:default }
-  #setup { position:fixed; inset:0; background:rgba(0,0,0,.7); display:flex; align-items:center; justify-content:center }
-  #setup .card { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:24px; width:min(420px,90vw); display:flex; flex-direction:column; gap:10px }
-  #setup input { background:var(--bg); color:var(--fg); border:1px solid var(--line); border-radius:6px; padding:8px; font:inherit }
-  #setup small { color:var(--dim) }
+  :root{--bg:#0b0f14;--panel:#141a22;--line:#233040;--fg:#e6edf3;--mut:#8b98a5;--acc:#3b82f6;--ok:#22c55e;--bad:#ef4444}
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,-apple-system,"Segoe UI","Noto Sans TC",sans-serif;overscroll-behavior:none}
+  #login{max-width:420px;margin:8vh auto;padding:24px;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+  #login h1{margin:0 0 6px;font-size:22px}
+  #login p{margin:0 0 18px;color:var(--mut);font-size:13px}
+  label{display:block;font-size:12px;color:var(--mut);margin:12px 0 4px}
+  input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:8px;background:#0e131a;color:var(--fg);font-size:16px;outline:none}
+  input:focus{border-color:var(--acc)}
+  #code{letter-spacing:.35em;font-size:22px;text-align:center;font-variant-numeric:tabular-nums}
+  button{padding:11px 14px;border:1px solid var(--line);border-radius:8px;background:#1b2430;color:var(--fg);font-size:15px;cursor:pointer}
+  button.primary{background:var(--acc);border-color:var(--acc)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .row{display:flex;gap:8px;margin-top:14px}
+  .row button{flex:1}
+  #msg{min-height:20px;margin-top:12px;font-size:13px;color:var(--mut)}
+  #msg.bad{color:var(--bad)} #msg.ok{color:var(--ok)}
+
+  #app{display:none;position:fixed;inset:0;flex-direction:column;background:#000}
+  #bar{display:flex;align-items:center;gap:6px;padding:6px 8px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  #bar .st{font-size:12px;color:var(--mut);margin-right:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #bar button{padding:6px 10px;font-size:13px}
+  #bar button.on{background:var(--acc);border-color:var(--acc)}
+  #stage{flex:1;position:relative;overflow:hidden;touch-action:none;outline:none}
+  #screen{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:contain;user-select:none;-webkit-user-select:none;pointer-events:none;image-rendering:auto}
+  #kb{display:none;padding:6px 8px;background:var(--panel);border-top:1px solid var(--line)}
+  #kb .keys{display:flex;gap:6px;overflow-x:auto;padding-bottom:6px}
+  #kb .keys button{padding:7px 10px;font-size:13px;white-space:nowrap;flex:0 0 auto}
+  #kb .typebox{display:flex;gap:6px}
+  #kb .typebox input{flex:1;font-size:16px;padding:9px 10px}
+  #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#000c;color:#fff;padding:8px 14px;border-radius:20px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
+  #toast.show{opacity:1}
 </style>
 </head>
 <body>
-<header>
-  <b>own-ai</b> <span id="status">未連線</span>
-  <span class="sp"></span>
-  <button id="reset" title="清除對話記憶">重置</button>
-  <button id="cfg" title="重新設定連線">設定</button>
-</header>
-<div id="log"></div>
-<form id="f">
-  <textarea id="in" placeholder="輸入訊息… (Enter 送出，Shift+Enter 換行)" rows="1"></textarea>
-  <button id="send" type="submit">送出</button>
-</form>
 
-<div id="setup" hidden>
-  <div class="card">
-    <b>連線設定</b>
-    <small>先在電腦上執行 <code>uv run server.py</code>。預設連本機，通常不用改。</small>
-    <input id="url" placeholder="ws://127.0.0.1:8765/ws">
-    <button id="save">連線</button>
+<section id="login">
+  <h1>遠端遙控</h1>
+  <p>驗證碼會寄到你的信箱。輸入正確後才能看畫面、操作滑鼠與鍵盤。</p>
+  <label>伺服器位址</label>
+  <input id="srv" placeholder="wss://xxxx.trycloudflare.com" autocomplete="off" spellcheck="false">
+  <div class="row">
+    <button id="btnConnect" class="primary">連線</button>
+    <button id="btnSend" disabled>寄送驗證碼</button>
   </div>
-</div>
+  <label>10 位數驗證碼</label>
+  <input id="code" inputmode="numeric" pattern="[0-9]*" maxlength="10" placeholder="••••••••••" disabled>
+  <div class="row"><button id="btnVerify" class="primary" disabled>驗證並開始遙控</button></div>
+  <div id="msg"></div>
+</section>
+
+<section id="app">
+  <div id="bar">
+    <span class="st" id="status">已連線</span>
+    <button id="bDrag" title="手機：單指拖曳變成按住拖曳">拖曳</button>
+    <button id="bKb">鍵盤</button>
+    <button id="bFull">全螢幕</button>
+    <button id="bOut">登出</button>
+  </div>
+  <div id="stage" tabindex="0"><img id="screen" alt=""></div>
+  <div id="kb">
+    <div class="keys">
+      <button data-k="Escape">Esc</button><button data-k="Tab">Tab</button><button data-k="Enter">Enter</button>
+      <button data-k="Backspace">⌫</button><button data-k="Delete">Del</button>
+      <button data-k="ArrowLeft">←</button><button data-k="ArrowUp">↑</button><button data-k="ArrowDown">↓</button><button data-k="ArrowRight">→</button>
+      <button data-k="Meta">Win</button>
+      <button data-c="ctrl,c">Ctrl+C</button><button data-c="ctrl,v">Ctrl+V</button><button data-c="ctrl,z">Ctrl+Z</button>
+      <button data-c="ctrl,a">Ctrl+A</button><button data-c="alt,tab">Alt+Tab</button><button data-c="alt,f4">Alt+F4</button>
+      <button data-c="win,d">Win+D</button>
+    </div>
+    <div class="typebox">
+      <input id="typeIn" placeholder="輸入文字（支援中文），按送出" autocomplete="off">
+      <button id="typeGo" class="primary">送出</button>
+    </div>
+  </div>
+</section>
+<div id="toast"></div>
 
 <script>
-const $ = s => document.querySelector(s);
-const log = $('#log'), status = $('#status'), input = $('#in'), sendBtn = $('#send');
-let ws, busy = false, current = null;
+(() => {
+  const $ = s => document.querySelector(s);
+  const srv = $('#srv'), code = $('#code'), msg = $('#msg');
+  const btnConnect = $('#btnConnect'), btnSend = $('#btnSend'), btnVerify = $('#btnVerify');
+  const app = $('#app'), login = $('#login'), stage = $('#stage'), screen = $('#screen'), status = $('#status');
+  const kb = $('#kb'), typeIn = $('#typeIn');
+  let ws = null, authed = false, imgW = 0, imgH = 0, curURL = null;
+  let dragMode = false;
 
-const cfg = {
-  get url() { return localStorage.getItem('ai.url') || 'ws://127.0.0.1:8765/ws'; },
-  set(url) { localStorage.setItem('ai.url', url); },
-};
+  // ---- server URL: ?s=... > localStorage > default
+  const qs = new URLSearchParams(location.search).get('s');
+  srv.value = qs || localStorage.getItem('srv') || 'ws://127.0.0.1:8765';
+  if (qs) history.replaceState(null, '', location.pathname);
 
-function add(cls, text) {
-  const d = document.createElement('div'); d.className = 'msg ' + cls; d.textContent = text;
-  log.appendChild(d); log.scrollTop = log.scrollHeight; return d;
-}
-function addTool(name, args) {
-  const d = document.createElement('details'); d.className = 'tool';
-  d.innerHTML = `<summary>⚙ ${name}</summary><pre class="a"></pre><pre class="r"></pre>`;
-  d.querySelector('.a').textContent = args;
-  log.appendChild(d); log.scrollTop = log.scrollHeight; return d;
-}
+  const say = (t, cls = '') => { msg.textContent = t; msg.className = cls; };
+  let toastT; const toast = t => { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2200); };
+  const send = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
 
-function connect() {
-  status.textContent = '連線中…'; status.className = '';
-  ws = new WebSocket(cfg.url);
-  ws.onopen = () => { status.textContent = '已連線'; status.className = 'ok'; };
-  ws.onclose = e => {
-    status.className = 'err';
-    status.textContent = e.code === 4403 ? '此網域不在伺服器允許清單' : '已斷線（電腦上有跑 uv run server.py 嗎？）';
-    if (e.code !== 4403) setTimeout(connect, 3000);
+  function connect() {
+    let u = srv.value.trim();
+    if (!u) return say('請輸入伺服器位址', 'bad');
+    if (u.startsWith('https://')) u = 'wss://' + u.slice(8);
+    if (u.startsWith('http://')) u = 'ws://' + u.slice(7);
+    if (!/^wss?:\/\//.test(u)) u = 'wss://' + u;
+    srv.value = u; localStorage.setItem('srv', u);
+    if (ws) { try { ws.close(); } catch {} }
+    say('連線中…');
+    btnConnect.disabled = true;
+    ws = new WebSocket(u);
+    ws.binaryType = 'blob';
+    ws.onopen = () => { say('已連線，請寄送驗證碼', 'ok'); btnSend.disabled = false; code.disabled = false; btnVerify.disabled = false; };
+    ws.onclose = e => {
+      btnConnect.disabled = false; btnSend.disabled = true;
+      if (authed) { authed = false; showLogin(); say('連線已中斷' + (e.reason ? '：' + e.reason : ''), 'bad'); }
+      else say('無法連線或已斷線' + (e.reason ? '：' + e.reason : ''), 'bad');
+    };
+    ws.onerror = () => {};
+    ws.onmessage = ev => {
+      if (ev.data instanceof Blob) { showFrame(ev.data); return; }
+      let m; try { m = JSON.parse(ev.data); } catch { return; }
+      switch (m.t) {
+        case 'hello': if (!m.smtp) say('已連線（伺服器未設定 SMTP，驗證碼會印在電腦主控台）', 'ok'); break;
+        case 'code_sent': say(m.via === 'email' ? '驗證碼已寄出，請查看信箱（5 分鐘內有效）' : '驗證碼已印在電腦主控台', 'ok'); code.focus(); break;
+        case 'error': say(m.msg, 'bad'); if (authed) toast(m.msg); break;
+        case 'auth_ok': authed = true; imgW = m.w; imgH = m.h; showApp(); break;
+        case 'kicked': toast(m.msg); break;
+        case 'notice': toast(m.msg); break;
+      }
+    };
+  }
+  btnConnect.onclick = connect;
+  btnSend.onclick = () => { send({ t: 'request_code' }); say('寄送中…'); };
+  btnVerify.onclick = () => {
+    const c = code.value.replace(/\D/g, '');
+    if (c.length !== 10) return say('請輸入 10 位數字', 'bad');
+    send({ t: 'verify', code: c }); say('驗證中…');
   };
-  ws.onmessage = ({ data }) => {
-    const ev = JSON.parse(data);
-    switch (ev.type) {
-      case 'hello': status.textContent = `已連線 · ${ev.backend} / ${ev.model}`; break;
-      case 'text': add('ai', ev.content); break;
-      case 'tool_call': current = addTool(ev.name, ev.arguments); break;
-      case 'tool_result': if (current) current.querySelector('.r').textContent = '→ ' + ev.result.slice(0, 2000); break;
-      case 'error': add('error', '✗ ' + ev.message); setBusy(false); break;
-      case 'done': setBusy(false); break;
-      case 'reset': log.innerHTML = ''; break;
+  code.addEventListener('keydown', e => { if (e.key === 'Enter') btnVerify.click(); });
+  srv.addEventListener('keydown', e => { if (e.key === 'Enter') connect(); });
+  if (qs) connect();
+
+  function showApp() { login.style.display = 'none'; app.style.display = 'flex'; status.textContent = `遙控中 ${imgW}×${imgH}`; stage.focus(); }
+  function showLogin() { app.style.display = 'none'; login.style.display = 'block'; code.value = ''; if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }
+
+  function showFrame(blob) {
+    const u = URL.createObjectURL(blob);
+    screen.onload = () => { if (curURL) URL.revokeObjectURL(curURL); curURL = u; };
+    screen.src = u;
+  }
+
+  // ---- map pointer position on the letter-boxed <img> to 0..1 screen coords
+  function norm(clientX, clientY) {
+    const r = stage.getBoundingClientRect();
+    const iw = screen.naturalWidth || imgW, ih = screen.naturalHeight || imgH;
+    if (!iw || !ih) return null;
+    const s = Math.min(r.width / iw, r.height / ih);
+    const dw = iw * s, dh = ih * s, ox = r.left + (r.width - dw) / 2, oy = r.top + (r.height - dh) / 2;
+    const x = (clientX - ox) / dw, y = (clientY - oy) / dh;
+    return { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) };
+  }
+  const BTN = ['left', 'middle', 'right'];
+
+  // ---- mouse (desktop)
+  let lastMove = 0;
+  stage.addEventListener('mousemove', e => {
+    if (e.pointerType === 'touch') return;
+    const now = performance.now(); if (now - lastMove < 33) return; lastMove = now;
+    const p = norm(e.clientX, e.clientY); if (p) send({ t: 'move', ...p });
+  });
+  stage.addEventListener('mousedown', e => { const p = norm(e.clientX, e.clientY); if (p) send({ t: 'down', b: BTN[e.button] || 'left', ...p }); stage.focus(); e.preventDefault(); });
+  stage.addEventListener('mouseup', e => { const p = norm(e.clientX, e.clientY); if (p) send({ t: 'up', b: BTN[e.button] || 'left', ...p }); e.preventDefault(); });
+  stage.addEventListener('contextmenu', e => e.preventDefault());
+  stage.addEventListener('wheel', e => {
+    e.preventDefault();
+    const p = norm(e.clientX, e.clientY) || { x: .5, y: .5 };
+    const dy = Math.sign(e.deltaY) * Math.max(1, Math.min(5, Math.round(Math.abs(e.deltaY) / 50)));
+    const dx = Math.sign(e.deltaX) * Math.max(1, Math.min(5, Math.round(Math.abs(e.deltaX) / 50)));
+    send({ t: 'scroll', dy: e.deltaY ? dy : 0, dx: e.deltaX ? dx : 0, ...p });
+  }, { passive: false });
+
+  // ---- touch (phone): tap=click, long-press=right click, 1-finger drag=move (or drag), 2-finger=scroll
+  let touches = new Map(), tStart = 0, tMoved = false, lpTimer = null, dragging = false, twoLast = null;
+  stage.addEventListener('touchstart', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) touches.set(t.identifier, { x: t.clientX, y: t.clientY, sx: t.clientX, sy: t.clientY });
+    if (touches.size === 1) {
+      tStart = performance.now(); tMoved = false; dragging = false;
+      const t = e.changedTouches[0]; const p = norm(t.clientX, t.clientY);
+      if (p) send({ t: 'move', ...p });
+      clearTimeout(lpTimer);
+      lpTimer = setTimeout(() => { if (!tMoved && touches.size === 1 && p) { send({ t: 'click', b: 'right', ...p }); navigator.vibrate?.(30); tMoved = true; } }, 550);
+      if (dragMode && p) { send({ t: 'down', b: 'left', ...p }); dragging = true; }
+    } else if (touches.size === 2) {
+      clearTimeout(lpTimer);
+      if (dragging) { const t = e.changedTouches[0]; const p = norm(t.clientX, t.clientY); if (p) send({ t: 'up', b: 'left', ...p }); dragging = false; }
+      twoLast = avg();
     }
-  };
-}
-function setBusy(b) { busy = b; sendBtn.disabled = b; if (!b) input.focus(); }
+  }, { passive: false });
+  function avg() { let x = 0, y = 0; for (const v of touches.values()) { x += v.x; y += v.y; } return { x: x / touches.size, y: y / touches.size }; }
+  stage.addEventListener('touchmove', e => {
+    e.preventDefault();
+    for (const t of e.changedTouches) { const v = touches.get(t.identifier); if (v) { v.x = t.clientX; v.y = t.clientY; if (Math.hypot(v.x - v.sx, v.y - v.sy) > 8) tMoved = true; } }
+    if (touches.size === 1) {
+      const t = e.changedTouches[0]; const p = norm(t.clientX, t.clientY);
+      const now = performance.now(); if (now - lastMove < 33 || !p) return; lastMove = now;
+      send({ t: 'move', ...p });
+    } else if (touches.size === 2 && twoLast) {
+      const a = avg(); const dy = twoLast.y - a.y, dx = twoLast.x - a.x;
+      if (Math.abs(dy) > 24 || Math.abs(dx) > 24) {
+        const p = norm(a.x, a.y) || { x: .5, y: .5 };
+        send({ t: 'scroll', dy: Math.abs(dy) > 24 ? Math.sign(dy) * 2 : 0, dx: Math.abs(dx) > 24 ? Math.sign(dx) * 2 : 0, ...p });
+        twoLast = a;
+      }
+    }
+  }, { passive: false });
+  stage.addEventListener('touchend', e => {
+    e.preventDefault();
+    clearTimeout(lpTimer);
+    const wasOne = touches.size === 1;
+    for (const t of e.changedTouches) {
+      const p = norm(t.clientX, t.clientY);
+      if (wasOne && p) {
+        if (dragging) { send({ t: 'up', b: 'left', ...p }); dragging = false; }
+        else if (!tMoved && performance.now() - tStart < 500) send({ t: 'click', b: 'left', ...p });
+      }
+      touches.delete(t.identifier);
+    }
+    if (touches.size < 2) twoLast = null;
+  }, { passive: false });
+  stage.addEventListener('touchcancel', () => { touches.clear(); clearTimeout(lpTimer); dragging = false; twoLast = null; });
 
-$('#f').onsubmit = e => {
-  e.preventDefault();
-  const text = input.value.trim();
-  if (!text || busy || ws?.readyState !== 1) return;
-  add('user', text); ws.send(JSON.stringify({ message: text }));
-  input.value = ''; input.style.height = 'auto'; setBusy(true);
-};
-input.onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); $('#f').requestSubmit(); } };
-input.oninput = () => { input.style.height = 'auto'; input.style.height = Math.min(input.scrollHeight, 200) + 'px'; };
-$('#reset').onclick = () => ws?.send(JSON.stringify({ action: 'reset' }));
-$('#cfg').onclick = () => { $('#url').value = cfg.url; $('#setup').hidden = false; };
-$('#save').onclick = () => { cfg.set($('#url').value.trim() || 'ws://127.0.0.1:8765/ws'); $('#setup').hidden = true; ws?.close(); connect(); };
+  // ---- keyboard (desktop): capture while stage focused
+  const IGNORE = new Set(['Dead', 'Unidentified', 'Process']);
+  stage.addEventListener('keydown', e => {
+    if (IGNORE.has(e.key)) return;
+    if (e.repeat && e.key.length > 1) { /* let held modifiers/arrows repeat */ }
+    e.preventDefault(); send({ t: 'keydown', k: e.key });
+  });
+  stage.addEventListener('keyup', e => { if (IGNORE.has(e.key)) return; e.preventDefault(); send({ t: 'keyup', k: e.key }); });
+  window.addEventListener('blur', () => { for (const k of ['Control', 'Shift', 'Alt', 'Meta']) send({ t: 'keyup', k }); });
 
-connect();
+  // ---- toolbar
+  $('#bDrag').onclick = e => { dragMode = !dragMode; e.currentTarget.classList.toggle('on', dragMode); toast(dragMode ? '拖曳模式：單指按住拖曳' : '一般模式：單指移動、點一下=左鍵'); };
+  $('#bKb').onclick = e => { const on = kb.style.display !== 'block'; kb.style.display = on ? 'block' : 'none'; e.currentTarget.classList.toggle('on', on); if (on) typeIn.focus(); else stage.focus(); };
+  $('#bFull').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => toast('此瀏覽器不支援全螢幕')); };
+  $('#bOut').onclick = () => { send({ t: 'logout' }); try { ws.close(); } catch {} };
+  kb.querySelectorAll('button[data-k]').forEach(b => b.onclick = () => { send({ t: 'keydown', k: b.dataset.k }); send({ t: 'keyup', k: b.dataset.k }); });
+  kb.querySelectorAll('button[data-c]').forEach(b => b.onclick = () => send({ t: 'combo', keys: b.dataset.c.split(',') }));
+  const doType = () => { const t = typeIn.value; if (!t) return; send({ t: 'type', text: t }); typeIn.value = ''; };
+  $('#typeGo').onclick = doType;
+  typeIn.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); doType(); send({ t: 'keydown', k: 'Enter' }); send({ t: 'keyup', k: 'Enter' }); } });
+
+  setInterval(() => { if (authed) send({ t: 'ping' }); }, 25000);
+})();
 </script>
 </body>
 </html>
