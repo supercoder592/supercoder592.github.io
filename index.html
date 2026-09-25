@@ -45,16 +45,19 @@
 <section id="login">
   <h1>遠端遙控</h1>
   <p>驗證碼會寄到你的信箱。輸入正確後才能看畫面、操作滑鼠與鍵盤。</p>
-  <label>伺服器位址</label>
-  <input id="srv" placeholder="wss://xxxx.trycloudflare.com" autocomplete="off" spellcheck="false">
-  <div class="row">
-    <button id="btnConnect" class="primary">連線</button>
-    <button id="btnSend" disabled>寄送驗證碼</button>
+  <div id="advanced" style="display:none">
+    <label>伺服器位址</label>
+    <input id="srv" placeholder="wss://xxxx.trycloudflare.com" autocomplete="off" spellcheck="false">
+    <div class="row">
+      <button id="btnConnect" class="primary">連線</button>
+      <button id="btnSend" disabled>寄送驗證碼</button>
+    </div>
   </div>
-  <label>10 位數驗證碼</label>
+  <label id="codeLabel">驗證碼</label>
   <input id="code" inputmode="numeric" pattern="[0-9]*" maxlength="10" placeholder="••••••••••" disabled>
   <div class="row"><button id="btnVerify" class="primary" disabled>驗證並開始遙控</button></div>
   <div id="msg"></div>
+  <div style="margin-top:10px"><a href="#" id="showAdvanced" style="color:var(--mut);font-size:12px">進階設定</a></div>
 </section>
 
 <section id="app">
@@ -103,6 +106,21 @@
   let toastT; const toast = t => { const el = $('#toast'); el.textContent = t; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), 2200); };
   const send = o => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
 
+  $('#showAdvanced').onclick = e => { e.preventDefault(); $('#advanced').style.display = 'block'; e.target.style.display = 'none'; };
+
+  // ---- best-effort device label for the code e-mail (browsers hide exact model numbers)
+  function guessDevice() {
+    const ua = navigator.userAgent || '';
+    const platform = navigator.platform || '';
+    if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'iPad';
+    if (/iPhone/.test(ua)) return 'iPhone';
+    if (/Android/.test(ua)) return /Mobile/.test(ua) ? 'Android 手機' : 'Android 平板';
+    if (/Macintosh|Mac OS X/.test(ua)) return 'Mac 電腦';
+    if (/Windows/.test(ua)) return 'Windows 電腦';
+    if (/Linux/.test(platform)) return 'Linux 電腦';
+    return '未知裝置';
+  }
+
   function connect() {
     let u = srv.value.trim();
     if (!u) return say('請輸入伺服器位址', 'bad');
@@ -131,8 +149,9 @@
           codeDigits = m.code_digits || 10;
           code.maxLength = codeDigits;
           code.placeholder = '•'.repeat(codeDigits);
+          $('#codeLabel').textContent = `${codeDigits} 位數驗證碼`;
           if (!m.smtp) say('已連線（伺服器未設定 SMTP，驗證碼會印在電腦主控台）', 'ok');
-          if (!autoRequested) { autoRequested = true; send({ t: 'request_code' }); say('自動寄送驗證碼中…'); }
+          if (!autoRequested) { autoRequested = true; send({ t: 'request_code', device: guessDevice() }); say('自動寄送驗證碼中…'); }
           break;
         case 'code_sent': say(m.via === 'email' ? '驗證碼已寄出，請查看信箱（5 分鐘內有效）' : '驗證碼已印在電腦主控台', 'ok'); code.focus(); break;
         case 'error': say(m.msg, 'bad'); if (authed) toast(m.msg); break;
@@ -143,7 +162,7 @@
     };
   }
   btnConnect.onclick = connect;
-  btnSend.onclick = () => { send({ t: 'request_code' }); say('寄送中…'); };
+  btnSend.onclick = () => { send({ t: 'request_code', device: guessDevice() }); say('寄送中…'); };
   btnVerify.onclick = () => {
     const c = code.value.replace(/\D/g, '');
     if (c.length !== codeDigits) return say(`請輸入 ${codeDigits} 位數字`, 'bad');
