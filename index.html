@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#0b0f14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="遠端遙控">
 <title>遠端遙控</title>
 <style>
   :root{--bg:#0b0f14;--panel:#141a22;--line:#233040;--fg:#e6edf3;--mut:#8b98a5;--acc:#3b82f6;--ok:#22c55e;--bad:#ef4444}
@@ -275,7 +279,21 @@
   // ---- toolbar
   $('#bDrag').onclick = e => { dragMode = !dragMode; e.currentTarget.classList.toggle('on', dragMode); toast(dragMode ? '拖曳模式：單指按住拖曳' : '一般模式：單指移動、點一下=左鍵'); };
   $('#bKb').onclick = e => { const on = kb.style.display !== 'block'; kb.style.display = on ? 'block' : 'none'; e.currentTarget.classList.toggle('on', on); if (on) typeIn.focus(); else stage.focus(); };
-  $('#bFull').onclick = () => { if (document.fullscreenElement) document.exitFullscreen(); else document.documentElement.requestFullscreen?.().catch(() => toast('此瀏覽器不支援全螢幕')); };
+  $('#bFull').onclick = () => {
+    if (document.fullscreenElement) { document.exitFullscreen(); return; }
+    const req = document.documentElement.requestFullscreen;
+    if (!req) {
+      // iOS Safari has no fullscreen API for normal pages - the only way to hide the
+      // browser chrome there is to launch the page from an "Add to Home Screen" icon.
+      if (/iPhone|iPad|iPod/.test(navigator.userAgent) && !navigator.standalone) {
+        toast('iPhone 不支援網頁全螢幕，請點分享 → 加入主畫面，改用主畫面圖示打開即可全螢幕');
+      } else {
+        toast('此瀏覽器不支援全螢幕');
+      }
+      return;
+    }
+    req.call(document.documentElement).catch(() => toast('全螢幕失敗，請確認是否由使用者點擊觸發'));
+  };
   $('#bOut').onclick = () => { send({ t: 'logout' }); try { ws.close(); } catch {} };
   kb.querySelectorAll('button[data-k]').forEach(b => b.onclick = () => { send({ t: 'keydown', k: b.dataset.k }); send({ t: 'keyup', k: b.dataset.k }); });
   kb.querySelectorAll('button[data-c]').forEach(b => b.onclick = () => send({ t: 'combo', keys: b.dataset.c.split(',') }));
