@@ -127,6 +127,7 @@
   const kb = $('#kb'), typeIn = $('#typeIn');
   let ws = null, authed = false, imgW = 0, imgH = 0, curURL = null;
   let dragMode = false, codeDigits = 10, autoRequested = false;
+  let manualLogout = false, reconnectTimer = null;
 
   // ---- server URL: ?s=... > localStorage > default
   const qs = new URLSearchParams(location.search).get('s');
@@ -162,14 +163,21 @@
     if (ws) { try { ws.close(); } catch {} }
     say('連線中…');
     btnConnect.disabled = true;
-    ws = new WebSocket(u);
-    ws.binaryType = 'blob';
+    const sock = new WebSocket(u);
+    ws = sock;
+    sock.binaryType = 'blob';
     autoRequested = false;
-    ws.onopen = () => { say('已連線…', 'ok'); btnSend.disabled = false; code.disabled = false; btnVerify.disabled = false; };
-    ws.onclose = e => {
+    sock.onopen = () => { say('已連線…', 'ok'); btnSend.disabled = false; code.disabled = false; btnVerify.disabled = false; clearTimeout(reconnectTimer); };
+    sock.onclose = e => {
+      if (ws !== sock) return; // a stale close from a socket we already replaced - ignore it
       btnConnect.disabled = false; btnSend.disabled = true;
-      if (authed) { authed = false; showLogin(); say('連線已中斷' + (e.reason ? '：' + e.reason : ''), 'bad'); }
-      else say('無法連線或已斷線' + (e.reason ? '：' + e.reason : ''), 'bad');
+      const wasAuthed = authed;
+      if (authed) { authed = false; showLogin(); }
+      if (manualLogout) { manualLogout = false; say('已登出', 'ok'); return; }
+      say('連線中斷，自動重新連線中…' + (e.reason ? '（' + e.reason + '）' : ''), 'bad');
+      if (wasAuthed) toast('連線中斷，重新連線中…');
+      clearTimeout(reconnectTimer);
+      reconnectTimer = setTimeout(connect, 2000);
     };
     ws.onerror = () => {};
     ws.onmessage = ev => {
@@ -362,7 +370,15 @@
     }
     req.call(document.documentElement).catch(() => toast('全螢幕失敗，請確認是否由使用者點擊觸發'));
   };
-  $('#bOut').onclick = () => { send({ t: 'logout' }); try { ws.close(); } catch {} };
+  $('#bOut').onclick = () => { manualLogout = true; clearTimeout(reconnectTimer); send({ t: 'logout' }); try { ws.close(); } catch {} };
+
+  // ---- iOS/Android suspend the socket in the background - reconnect the moment the tab is visible again
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && !manualLogout && (!ws || ws.readyState > WebSocket.OPEN)) {
+      clearTimeout(reconnectTimer);
+      connect();
+    }
+  });
   kb.querySelectorAll('button[data-k]').forEach(b => b.onclick = () => { send({ t: 'keydown', k: b.dataset.k }); send({ t: 'keyup', k: b.dataset.k }); });
   kb.querySelectorAll('button[data-c]').forEach(b => b.onclick = () => send({ t: 'combo', keys: b.dataset.c.split(',') }));
   const doType = () => { const t = typeIn.value; if (!t) return; send({ t: 'type', text: t }); typeIn.value = ''; };
