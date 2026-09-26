@@ -40,6 +40,15 @@
   #kb .keys button{padding:7px 10px;font-size:13px;white-space:nowrap;flex:0 0 auto}
   #kb .typebox{display:flex;gap:6px}
   #kb .typebox input{flex:1;font-size:16px;padding:9px 10px}
+  #agentPanel{display:none;padding:8px;background:var(--panel);border-top:1px solid var(--line)}
+  #agentPanel .typebox{display:flex;gap:6px}
+  #agentPanel .typebox input{flex:1;font-size:15px;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:#0e131a;color:var(--fg)}
+  #agentPanel .row{display:flex;gap:8px;margin-top:8px}
+  #agentPanel .row button{flex:1;padding:9px;font-size:14px}
+  #agentStatus{font-size:12px;color:var(--mut);margin-top:8px;max-height:60px;overflow-y:auto;white-space:pre-line}
+  #agentExplain{font-size:14px;background:#0e131a;border:1px solid var(--acc);border-radius:8px;padding:10px;margin-top:8px}
+  #agentApprove{background:var(--ok);border-color:var(--ok)}
+  #agentReject{background:var(--bad);border-color:var(--bad)}
   #toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:#000c;color:#fff;padding:8px 14px;border-radius:20px;font-size:13px;opacity:0;transition:.25s;pointer-events:none}
   #toast.show{opacity:1}
 </style>
@@ -69,10 +78,28 @@
     <span class="st" id="status">已連線</span>
     <button id="bDrag" title="手機：單指拖曳變成按住拖曳">拖曳</button>
     <button id="bKb">鍵盤</button>
+    <button id="bAgent">AI 代理</button>
     <button id="bFull">全螢幕</button>
     <button id="bOut">登出</button>
   </div>
   <div id="stage" tabindex="0"><img id="screen" alt=""></div>
+  <div id="agentPanel">
+    <div class="typebox">
+      <input id="agentTaskIn" placeholder="告訴 AI 要做什麼，例如：幫我打開小畫家" autocomplete="off">
+      <button id="agentGo" class="primary">開始</button>
+    </div>
+    <div id="agentBody" style="display:none">
+      <div id="agentStatus"></div>
+      <div id="agentProposal" style="display:none">
+        <div id="agentExplain"></div>
+        <div class="row">
+          <button id="agentApprove" class="primary">✓ 同意執行</button>
+          <button id="agentReject">✕ 拒絕並停止</button>
+        </div>
+      </div>
+      <div class="row"><button id="agentStop">停止代理</button></div>
+    </div>
+  </div>
   <div id="kb">
     <div class="keys">
       <button data-k="Escape">Esc</button><button data-k="Tab">Tab</button><button data-k="Enter">Enter</button>
@@ -162,6 +189,10 @@
         case 'auth_ok': authed = true; imgW = m.w; imgH = m.h; showApp(); break;
         case 'kicked': toast(m.msg); break;
         case 'notice': toast(m.msg); break;
+        case 'agent_started': agentLog(`任務開始：${m.task}`); break;
+        case 'agent_status': agentLog(m.msg); break;
+        case 'agent_proposal': showAgentProposal(m.step, m.action, m.explain); break;
+        case 'agent_finished': agentLog(`已停止（${agentReasonText(m.reason)}）`); hideAgentProposal(); agentGo.disabled = false; break;
       }
     };
   }
@@ -279,6 +310,43 @@
   // ---- toolbar
   $('#bDrag').onclick = e => { dragMode = !dragMode; e.currentTarget.classList.toggle('on', dragMode); toast(dragMode ? '拖曳模式：單指按住拖曳' : '一般模式：單指移動、點一下=左鍵'); };
   $('#bKb').onclick = e => { const on = kb.style.display !== 'block'; kb.style.display = on ? 'block' : 'none'; e.currentTarget.classList.toggle('on', on); if (on) typeIn.focus(); else stage.focus(); };
+
+  // ---- AI 代理 (local vision model, one step at a time, always waits for approval) ----
+  const agentPanel = $('#agentPanel'), agentTaskIn = $('#agentTaskIn'), agentGo = $('#agentGo');
+  const agentBody = $('#agentBody'), agentStatusEl = $('#agentStatus'), agentProposalEl = $('#agentProposal'), agentExplainEl = $('#agentExplain');
+  const ACTION_LABEL = { click: '點擊', double_click: '雙擊', right_click: '按右鍵', type: '輸入文字', key: '按鍵', scroll: '捲動', wait: '等待' };
+  function agentActionText(a) {
+    switch (a.action) {
+      case 'click': case 'double_click': case 'right_click':
+        return `${ACTION_LABEL[a.action]}位置 (${Math.round(a.x * 100)}%, ${Math.round(a.y * 100)}%)`;
+      case 'type': return `輸入文字：「${a.text}」`;
+      case 'key': return `按下按鍵：${a.key}`;
+      case 'scroll': return `捲動畫面`;
+      case 'wait': return `等待 ${a.seconds || 1} 秒`;
+      default: return a.action;
+    }
+  }
+  function agentReasonText(r) {
+    return { done: '任務完成', stopped: '已停止', rejected: '已拒絕', error: '發生錯誤', max_steps: '已達步數上限', model_unavailable: 'AI 模型尚未就緒', stuck: 'AI 卡住了' }[r] || r;
+  }
+  function agentLog(line) { agentStatusEl.textContent = (agentStatusEl.textContent ? agentStatusEl.textContent + '\n' : '') + line; agentStatusEl.scrollTop = agentStatusEl.scrollHeight; }
+  function showAgentProposal(step, action, explain) {
+    agentExplainEl.textContent = `第 ${step} 步：${explain}\n→ ${agentActionText(action)}`;
+    agentProposalEl.style.display = 'block';
+    toast(`AI 提議第 ${step} 步，請確認`);
+  }
+  function hideAgentProposal() { agentProposalEl.style.display = 'none'; }
+  $('#bAgent').onclick = e => { const on = agentPanel.style.display !== 'block'; agentPanel.style.display = on ? 'block' : 'none'; e.currentTarget.classList.toggle('on', on); };
+  agentGo.onclick = () => {
+    const text = agentTaskIn.value.trim();
+    if (!text) return;
+    send({ t: 'agent_task', text });
+    agentStatusEl.textContent = ''; hideAgentProposal();
+    agentBody.style.display = 'block'; agentGo.disabled = true; agentTaskIn.value = '';
+  };
+  $('#agentApprove').onclick = () => { send({ t: 'agent_decision', approve: true }); hideAgentProposal(); };
+  $('#agentReject').onclick = () => { send({ t: 'agent_decision', approve: false }); hideAgentProposal(); };
+  $('#agentStop').onclick = () => { send({ t: 'agent_stop' }); hideAgentProposal(); agentGo.disabled = false; };
   $('#bFull').onclick = () => {
     if (document.fullscreenElement) { document.exitFullscreen(); return; }
     const req = document.documentElement.requestFullscreen;
